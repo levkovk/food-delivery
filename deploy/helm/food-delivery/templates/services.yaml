@@ -1,0 +1,160 @@
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "fd.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+    tier: {{ $svc.tier }}
+spec:
+  replicas: {{ $svc.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  # Новая версия поднимается раньше, чем останавливается старая,
+  # поэтому обновление проходит без простоя.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "fd.labels" $ | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+        tier: {{ $svc.tier }}
+        {{- if $svc.db }}
+        db-access: "true"
+        {{- end }}
+        {{- if $svc.kafka }}
+        kafka-access: "true"
+        {{- end }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      {{- include "fd.pullSecrets" $ | nindent 6 }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      terminationGracePeriodSeconds: 20
+      tolerations:
+        {{- include "fd.tolerations" $ | nindent 8 }}
+      # Реплики распределяются по разным узлам кластера.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $name }}
+      containers:
+        - name: app
+          image: {{ include "fd.image" (list $ $svc.program) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: food-delivery-config
+          env:
+            {{- if $svc.db }}
+            - name: DB_USER
+              value: {{ $svc.db.user }}
+            - name: DB_SCHEMA
+              value: {{ $svc.db.user }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecret }}
+                  key: {{ $svc.db.passwordKey }}
+            {{- end }}
+            {{- range $k, $v := $svc.secretEnv }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecret }}
+                  key: {{ $v }}
+            {{- end }}
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "fd.containerSecurity" $ | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "fd.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- if gt (int $svc.replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "fd.labels" $ | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+{{- end }}
+{{- if $svc.hpa }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "fd.labels" $ | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $svc.hpa.min }}
+  maxReplicas: {{ $svc.hpa.max }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.hpa.cpu }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120
+{{- end }}
+{{- end }}

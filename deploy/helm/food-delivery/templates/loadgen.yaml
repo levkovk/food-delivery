@@ -1,0 +1,47 @@
+{{- if .Values.loadgen.enabled }}
+# Генератор нагрузки запускается по расписанию и создаёт пакет заказов.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: loadgen
+  labels:
+    {{- include "fd.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.loadgen.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            {{- include "fd.labels" . | nindent 12 }}
+            app.kubernetes.io/name: loadgen
+        spec:
+          {{- include "fd.pullSecrets" . | nindent 10 }}
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+          containers:
+            - name: loadgen
+              image: {{ include "fd.image" (list . "loadgen") }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - { name: GATEWAY_URL, value: "http://gateway:8080" }
+                - { name: ORDERS_PER_BATCH, value: {{ .Values.loadgen.ordersPerBatch | quote }} }
+                - name: LOADGEN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: operator-password
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { cpu: 100m, memory: 64Mi }
+              securityContext:
+                {{- include "fd.containerSecurity" . | nindent 16 }}
+{{- end }}

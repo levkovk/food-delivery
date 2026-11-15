@@ -1,0 +1,25 @@
+# Кластер k3s из трёх узлов в контейнерах Docker: управляющий узел и два
+# рабочих. Порт 8080 хоста ведёт на входной контроллер Traefik.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: food
+servers: 1
+agents: 2
+image: rancher/k3s:v1.31.4-k3s1
+ports:
+  - port: 8080:80
+    nodeFilters: [loadbalancer]
+options:
+  k3d:
+    wait: true
+    timeout: "180s"
+  k3s:
+    extraArgs:
+      # Рабочая нагрузка не размещается на управляющем узле.
+      - arg: --node-taint=node-role.kubernetes.io/control-plane=true:NoSchedule
+        nodeFilters: [server:*]
+    nodeLabels:
+      # Первый рабочий узел хранит данные (PostgreSQL и Kafka).
+      - label: tier=data
+        nodeFilters: [agent:0]

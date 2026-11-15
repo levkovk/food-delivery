@@ -1,0 +1,88 @@
+# Реестр и тег образов. В конвейере CI/CD тег - SHA коммита.
+image:
+  registry: ghcr.io/OWNER
+  prefix: food-delivery-
+  tag: latest
+  pullPolicy: IfNotPresent
+  pullSecret: ""
+
+# Имя секрета с паролями и ключом JWT. Секрет создаёт сценарий
+# развёртывания, в репозитории значений нет.
+existingSecret: food-delivery-secrets
+
+# Длительность минуты модели в секундах (время готовки и доставки).
+timeScale: 1
+
+kafka:
+  partitions: 3
+  storage: 2Gi
+
+postgres:
+  storage: 2Gi
+
+# Узлы с этой меткой хранят данные (PostgreSQL, Kafka).
+dataNodeSelector:
+  tier: data
+
+ingress:
+  className: traefik
+  host: ""
+
+services:
+  gateway:
+    program: gateway
+    replicas: 2
+    tier: edge
+    db: { user: gateway, passwordKey: gateway-db-password }
+    hpa: { min: 2, max: 5, cpu: 60 }
+    secretEnv:
+      JWT_SECRET: jwt-secret
+      ADMIN_PASSWORD: admin-password
+      OPERATOR_PASSWORD: operator-password
+  order-service:
+    program: order
+    replicas: 2
+    tier: app
+    kafka: true
+    db: { user: orders, passwordKey: order-db-password }
+    hpa: { min: 2, max: 6, cpu: 60 }
+  restaurant-service:
+    program: restaurant
+    replicas: 2
+    tier: app
+    kafka: true
+    db: { user: restaurants, passwordKey: restaurant-db-password }
+  payment-service:
+    program: payment
+    replicas: 2
+    tier: app
+    kafka: true
+    db: { user: payments, passwordKey: payment-db-password }
+    env:
+      PAYMENT_LIMIT: "5000"
+  courier-service:
+    program: courier
+    replicas: 2
+    tier: app
+    kafka: true
+    db: { user: couriers, passwordKey: courier-db-password }
+  notification-service:
+    program: notification
+    replicas: 1
+    tier: app
+    kafka: true
+
+resources:
+  requests: { cpu: 50m, memory: 32Mi }
+  limits: { cpu: 300m, memory: 128Mi }
+
+web:
+  replicas: 2
+
+loadgen:
+  enabled: true
+  schedule: "*/1 * * * *"
+  ordersPerBatch: 4
+
+monitoring:
+  enabled: true

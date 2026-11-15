@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Кухня и доставка - пульт оператора</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="login" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <p class="brand"><span class="brand-mark" aria-hidden="true"></span>Кухня и доставка</p>
+      <h1>Пульт оператора</h1>
+      <label>Логин<input id="login-username" name="username" autocomplete="username" required></label>
+      <label>Пароль<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Войти</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <header class="top">
+      <p class="brand"><span class="brand-mark" aria-hidden="true"></span>Кухня и доставка</p>
+      <nav id="tabs">
+        <button data-tab="board" class="active">Заказы</button>
+        <button data-tab="restaurants">Рестораны</button>
+        <button data-tab="couriers">Курьеры</button>
+        <button data-tab="payments" data-admin>Платежи</button>
+        <button data-tab="feed">События</button>
+      </nav>
+      <div class="who"><span id="who"></span><button id="logout" class="link">Выйти</button></div>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <main>
+      <section data-view="board">
+        <div class="toolbar">
+          <h2>Заказы на конвейере</h2>
+          <button id="new-order">Новый заказ</button>
+        </div>
+        <div class="board" id="board"></div>
+      </section>
+
+      <section data-view="restaurants" hidden>
+        <div class="toolbar"><h2>Рестораны и меню</h2></div>
+        <div class="split">
+          <table id="restaurants"></table>
+          <div id="menu" class="menu-panel"></div>
+        </div>
+      </section>
+
+      <section data-view="couriers" hidden>
+        <div class="toolbar"><h2>Курьеры</h2><span class="hint">Снятие со смены не прерывает текущую доставку</span></div>
+        <table id="couriers"></table>
+      </section>
+
+      <section data-view="payments" hidden>
+        <div class="toolbar"><h2>Платежи</h2></div>
+        <table id="payments"></table>
+      </section>
+
+      <section data-view="feed" hidden>
+        <div class="toolbar"><h2>Поток событий Kafka</h2><span id="feed-state" class="hint"></span></div>
+        <ol id="feed" class="feed"></ol>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="order-dialog">
+    <form id="order-form" method="dialog">
+      <h2>Новый заказ</h2>
+      <label>Ресторан<select id="order-restaurant"></select></label>
+      <div id="order-items" class="order-items"></div>
+      <label>Адрес доставки<input id="order-address" value="ул. Садовая, 12, кв. 4" required></label>
+      <p id="order-total" class="total"></p>
+      <p id="order-error" class="error" role="alert"></p>
+      <div class="actions">
+        <button type="button" id="order-cancel" class="secondary">Закрыть</button>
+        <button type="submit" id="order-submit">Оформить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="details-dialog">
+    <div id="details"></div>
+    <div class="actions"><button type="button" id="details-close" class="secondary">Закрыть</button></div>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
