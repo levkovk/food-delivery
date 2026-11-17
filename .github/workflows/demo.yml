@@ -26,7 +26,7 @@ jobs:
           pip install -q playwright==1.49.1
           playwright install --with-deps chromium
       - name: Запись
-        run: xvfb-run -a -s '-screen 0 2200x1600x24' demo/record.sh
+        run: xvfb-run -a -s '-screen 0 2200x1600x24' bash demo/record.sh
       - name: Страница последнего запуска CI/CD
         if: always()
         env:
