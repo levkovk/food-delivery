@@ -63,6 +63,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: food-delivery-config
+          {{- if or $svc.db $svc.secretEnv $svc.env }}
           env:
             {{- if $svc.db }}
             - name: DB_USER
@@ -86,6 +87,7 @@ spec:
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
+          {{- end }}
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 3
