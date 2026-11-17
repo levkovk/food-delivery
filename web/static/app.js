@@ -90,7 +90,10 @@ document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('cli
 
 function switchTab(tab) {
   state.tab = tab;
-  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('#tabs button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+    if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
   document.querySelectorAll('[data-view]').forEach((v) => { v.hidden = v.dataset.view !== tab; });
   refresh();
 }
@@ -108,7 +111,7 @@ async function loadStats() {
     [s.avg_delivery_seconds ? `${Math.round(s.avg_delivery_seconds)} с` : '-', 'среднее время доставки'],
     [rub(s.revenue || 0), 'выручка по доставленным'],
   ];
-  $('#stats').replaceChildren(...items.map(([v, t]) => el('div', { class: 'stat' }, el('b', {}, v), el('span', {}, t))));
+  $('#stats').replaceChildren(...items.map(([v, t], i) => el('div', { class: i === 0 ? 'stat lead' : 'stat' }, el('b', {}, v), el('span', {}, t))));
 }
 
 async function loadBoard() {
@@ -197,7 +200,13 @@ async function loadRestaurants() {
   if (!state.restaurant && rs.length) state.restaurant = rs[0].id;
   $('#restaurants').replaceChildren(
     el('tr', {}, el('th', {}, 'Ресторан'), el('th', {}, 'Кухня'), el('th', {}, 'Зона'), el('th', { class: 'num' }, 'Готовка, мин'), el('th', {}, 'Статус')),
-    ...rs.map((r) => el('tr', { class: `clickable ${r.id === state.restaurant ? 'selected' : ''}`, onclick: () => { state.restaurant = r.id; loadRestaurants(); } },
+    ...rs.map((r) => el('tr', {
+      class: `clickable ${r.id === state.restaurant ? 'selected' : ''}`,
+      tabindex: 0,
+      'aria-selected': r.id === state.restaurant ? 'true' : 'false',
+      onclick: () => { state.restaurant = r.id; loadRestaurants(); },
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); state.restaurant = r.id; loadRestaurants(); } },
+    },
       el('td', {}, r.name), el('td', {}, r.cuisine), el('td', {}, ZONES[r.zone]), el('td', { class: 'num' }, r.prep_minutes),
       el('td', {}, r.active ? el('span', { class: 'badge ok' }, 'принимает') : el('span', { class: 'badge' }, 'закрыт')))));
   const current = rs.find((r) => r.id === state.restaurant);
