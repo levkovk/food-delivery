@@ -21,8 +21,8 @@
   <div id="app" hidden>
     <header class="top">
       <p class="brand"><span class="brand-mark" aria-hidden="true"></span>Кухня и доставка</p>
-      <nav id="tabs">
-        <button data-tab="board" class="active">Заказы</button>
+      <nav id="tabs" aria-label="Разделы">
+        <button data-tab="board" class="active" aria-current="page">Заказы</button>
         <button data-tab="restaurants">Рестораны</button>
         <button data-tab="couriers">Курьеры</button>
         <button data-tab="payments" data-admin>Платежи</button>
@@ -31,7 +31,7 @@
       <div class="who"><span id="who"></span><button id="logout" class="link">Выйти</button></div>
     </header>
 
-    <section class="stats" id="stats"></section>
+    <section class="stats" id="stats" aria-label="Сводка"></section>
 
     <main>
       <section data-view="board">
@@ -62,7 +62,7 @@
 
       <section data-view="feed" hidden>
         <div class="toolbar"><h2>Поток событий Kafka</h2><span id="feed-state" class="hint"></span></div>
-        <ol id="feed" class="feed"></ol>
+        <ol id="feed" class="feed" aria-live="off"></ol>
       </section>
     </main>
   </div>
