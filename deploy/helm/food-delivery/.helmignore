@@ -1,0 +1,10 @@
+# Файлы, которые не входят в чарт
+.DS_Store
+*.tgz
+*.tar
+*.tar.gz
+*.tar.bz2
+*.bak
+*.tmp
+*.orig
+*~
