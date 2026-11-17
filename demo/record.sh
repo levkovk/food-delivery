@@ -26,9 +26,9 @@ docker compose --profile load down -v
 
 # 2. Кластер k3d и развёртывание Helm
 title "Кластер"
-scripts/cluster-up.sh
-LOCAL_BUILD=1 scripts/deploy.sh
-scripts/smoke-test.sh | tee "$OUT/smoke.txt"
+bash scripts/cluster-up.sh
+LOCAL_BUILD=1 bash scripts/deploy.sh
+bash scripts/smoke-test.sh | tee "$OUT/smoke.txt"
 echo "Ожидание заказов от генератора нагрузки"
 sleep 200
 
