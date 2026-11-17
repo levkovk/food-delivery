@@ -28,7 +28,8 @@ jobs:
         run: go vet ./...
       - name: Модульные тесты
         run: go test -race -count=1 ./...
-      - uses: azure/setup-helm@v4
+      - name: Установка Helm
+        run: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Проверка Helm-чарта
         run: |
           helm lint deploy/helm/food-delivery
@@ -75,7 +76,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - name: Установка Helm
+        run: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Установка k3d
         run: curl -sSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.7.5 bash
       - name: Создание кластера из трёх узлов
