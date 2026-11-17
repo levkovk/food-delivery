@@ -1,1 +1,110 @@
-404: Not Found
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    name: Проверка кода и манифестов
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Форматирование
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Статический анализ
+        run: go vet ./...
+      - name: Модульные тесты
+        run: go test -race -count=1 ./...
+      - uses: azure/setup-helm@v4
+      - name: Проверка Helm-чарта
+        run: |
+          helm lint deploy/helm/food-delivery
+          helm template food-delivery deploy/helm/food-delivery --namespace food > /tmp/manifests.yaml
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz -C /tmp
+          /tmp/kubeconform -strict -summary -ignore-missing-schemas /tmp/manifests.yaml
+      - name: Проверка docker-compose.yml
+        run: cp .env.example .env && docker compose config --quiet
+
+  build:
+    name: Сборка ${{ matrix.service }}
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, order, restaurant, payment, courier, notification, loadgen, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Имя образа
+        id: name
+        run: echo "image=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/food-delivery-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service == 'web' && 'web' || '.' }}
+          build-args: SERVICE=${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ steps.name.outputs.image }}:${{ github.sha }}
+            ${{ steps.name.outputs.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: Развёртывание в кластер k3d
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Установка k3d
+        run: curl -sSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.7.5 bash
+      - name: Создание кластера из трёх узлов
+        run: bash scripts/cluster-up.sh
+      - name: Доступ кластера к реестру образов
+        run: |
+          kubectl create namespace food --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n food create secret docker-registry ghcr \
+            --docker-server=ghcr.io --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}"
+      - name: Развёртывание Helm
+        env:
+          TAG: ${{ github.sha }}
+          PULL_SECRET: ghcr
+        run: |
+          export REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          bash scripts/deploy.sh
+      - name: Состояние кластера
+        run: |
+          kubectl get nodes -L tier
+          kubectl -n food get pods -o wide
+          kubectl -n food get hpa,ingress,networkpolicy
+      - name: Приёмочная проверка
+        run: bash scripts/smoke-test.sh
+      - name: Диагностика при ошибке
+        if: failure()
+        run: |
+          kubectl -n food get pods -o wide || true
+          kubectl -n food get events --sort-by=.lastTimestamp | tail -40 || true
+          for d in gateway order-service restaurant-service payment-service courier-service; do
+            echo "--- $d"; kubectl -n food logs deploy/$d --tail=30 || true
+          done
